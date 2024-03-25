@@ -11,6 +11,43 @@
 #define PORT 12345
 #define BUFFER_SIZE 256
 
+
+#define DEFAULT_FILE_NAME "tarantuladb-config.json"
+#define ENV_VAR_NAME "TARANTULADB_DATA_FILE"
+
+typedef struct {
+    char file_path[256];
+} ServerConfig;
+
+void load_config_from_file(const char *filename, ServerConfig *config) {
+    
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Failed to open configuration file");
+        return;
+    }
+
+    // todo replace with JSON parsing logic
+    strncpy(config->file_path, "database.dat", sizeof(config->file_path) - 1);
+
+    
+    fclose(file);
+}
+
+void configure_server(ServerConfig *config) {
+    // Initialize with default values
+    strncpy(config->file_path, DEFAULT_FILE_NAME, sizeof(config->file_path) - 1);
+
+    // Load configuration from file
+    load_config_from_file("server_config.json", config);
+
+    // Check for environment variable override
+    char *env_file_path = getenv(ENV_VAR_NAME);
+    if (env_file_path != NULL) {
+        strncpy(config->file_path, env_file_path, sizeof(config->file_path) - 1);
+    }
+}
+
 typedef struct {
     int id;
     char name[20];
@@ -49,6 +86,7 @@ void fetchAllRecords(int client_sockfd) {
     fclose(file);
 }
 
+//for fork of process
 void handleClient(int sock) {
     char buffer[BUFFER_SIZE];
     int n;
