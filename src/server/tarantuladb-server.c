@@ -8,7 +8,7 @@
 #include <signal.h>
 
 #define FILE_NAME "database.dat"
-#define PORT 12345
+#define PORT 2345
 #define BUFFER_SIZE 256
 
 
@@ -86,6 +86,63 @@ void fetchAllRecords(int client_sockfd) {
     fclose(file);
 }
 
+void fetchById(int client_sockfd, int id) {
+    Record record;
+    FILE *file = fopen(FILE_NAME, "rb");
+    char buffer[BUFFER_SIZE];
+    if (file == NULL) {
+        perror("Error opening file");
+        return;
+    }
+    int found = 0;
+    while (fread(&record, sizeof(Record), 1, file)) {
+        if (record.id == id) {
+            snprintf(buffer, BUFFER_SIZE, "ID: %d, Name: %s\n", record.id, record.name);
+            write(client_sockfd, buffer, strlen(buffer));
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        snprintf(buffer, BUFFER_SIZE, "No record found with ID: %d\n", id);
+        write(client_sockfd, buffer, strlen(buffer));
+    }
+    fclose(file);
+}
+
+void deleteById(int client_sockfd, int id) {
+    Record record;
+    FILE *file = fopen(FILE_NAME, "rb");
+    FILE *tempFile = fopen("temp.dat", "wb");
+    char buffer[BUFFER_SIZE];
+    if (file == NULL || tempFile == NULL) {
+        perror("Error opening file");
+        return;
+    }
+    int found = 0;
+    while (fread(&record, sizeof(Record), 1, file)) {
+        if (record.id != id) {
+            fwrite(&record, sizeof(Record), 1, tempFile);
+        } else {
+            found = 1;
+        }
+    }
+    fclose(file);
+    fclose(tempFile);
+
+    // Rename and delete files as needed
+    if (found) {
+        remove(FILE_NAME); // Remove the original file
+        rename("temp.dat", FILE_NAME); // Rename the temp file to original file name
+        snprintf(buffer, BUFFER_SIZE, "Record with ID: %d deleted successfully.\n", id);
+    } else {
+        remove("temp.dat"); // No need to replace original, delete temp file
+        snprintf(buffer, BUFFER_SIZE, "No record found with ID: %d to delete.\n", id);
+    }
+    write(client_sockfd, buffer, strlen(buffer));
+}
+
+
 //for fork of process
 void handleClient(int sock) {
     char buffer[BUFFER_SIZE];
@@ -111,6 +168,42 @@ void handleClient(int sock) {
 
     close(sock);
 }
+
+
+void handleClient2(int sock) {
+    char buffer[BUFFER_SIZE];
+    int n, id;
+    char command[20];  // Assuming commands are short words
+
+    bzero(buffer, BUFFER_SIZE);
+    n = read(sock, buffer, BUFFER_SIZE - 1);
+    if (n < 0) error("ERROR reading from socket");
+
+    printf("Received command: %s\n", buffer);
+
+    // Parse the command from the buffer
+    sscanf(buffer, "%s %d", command, &id);
+
+    if (strncmp(command, "INSERT", 6) == 0) {
+        char name[20];
+        // Re-parse to get the name for the insert command as it wasn't fetched before
+        sscanf(buffer, "INSERT %d %s", &id, name);
+        insertRecord(id, name);
+        write(sock, "Record inserted\n", 17);
+    } else if (strncmp(command, "FETCH_ALL", 9) == 0) {
+        fetchAllRecords(sock);
+    } else if (strncmp(command, "FETCH_BY_ID", 11) == 0) {
+        fetchById(sock, id);
+    } else if (strncmp(command, "DELETE_BY_ID", 12) == 0) {
+        deleteById(sock, id);
+    } else {
+        snprintf(buffer, BUFFER_SIZE, "Unknown command\n");
+        write(sock, buffer, strlen(buffer));
+    }
+
+    close(sock);
+}
+
 
 int main() {
     int sockfd, newsockfd, portno;
@@ -149,7 +242,7 @@ int main() {
 
         if (pid == 0) {  // This is the child process
             close(sockfd);
-            handleClient(newsockfd);
+            handleClient2(newsockfd);
             exit(0);
         } else {  // This is the parent process
             close(newsockfd);

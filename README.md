@@ -15,3 +15,5 @@ It is built specifically to meet requirements for monitoring and control of sola
 It's inspiration comes from a desire to learn more about sockets, distributed databases, and cloud technologies, as well as meeting short term performance and reliability needs in a remote low power environment.
 
 See DesignGoals.md for more details.
+
+To use, run make from the client and server directories.  The server will start up on port 2345 by default.
